@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aperture — Capture Instrument</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --ink: #12151c;
+    --panel: #1a1f29;
+    --panel-raised: #212734;
+    --hairline: #2c3342;
+    --amber: #e8a33d;
+    --amber-dim: rgba(232, 163, 61, 0.16);
+    --paper: #eef0f4;
+    --dim: #6b7383;
+    --ok: #4fd1a5;
+    --err: #e8615f;
+    --radius: 18px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(1200px 600px at 50% -10%, rgba(232,163,61,0.07), transparent 60%),
+      var(--ink);
+    color: var(--paper);
+    font-family: 'Space Grotesk', sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 16px;
+  }
+
+  .mono { font-family: 'JetBrains Mono', monospace; }
+
+  .instrument {
+    width: 100%;
+    max-width: 480px;
+  }
+
+  .eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 10px;
+  }
+  .eyebrow .ring {
+    width: 6px; height: 6px; border-radius: 50%;
+    border: 1px solid var(--dim);
+  }
+  .eyebrow .ring.live { border-color: var(--ok); background: var(--ok); box-shadow: 0 0 8px var(--ok); }
+  .eyebrow .ring.rec { border-color: var(--err); background: var(--err); animation: blink 1s infinite; }
+
+  h1 {
+    text-align: center;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+  h1 span { color: var(--amber); }
+
+  p.tagline {
+    text-align: center;
+    color: var(--dim);
+    font-size: 13.5px;
+    margin: 0 0 26px;
+    line-height: 1.5;
+  }
+
+  /* Viewfinder */
+  .viewfinder {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 4 / 3;
+    background: #000;
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: 0 0 0 1px var(--hairline), 0 20px 50px -20px rgba(0,0,0,0.7);
+  }
+  .viewfinder video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    transform: scaleX(-1);
+    display: block;
+  }
+  .corner {
+    position: absolute;
+    width: 22px; height: 22px;
+    border-color: var(--amber);
+    opacity: 0.85;
+  }
+  .corner.tl { top: 12px; left: 12px; border-top: 2px solid; border-left: 2px solid; border-radius: 4px 0 0 0; }
+  .corner.tr { top: 12px; right: 12px; border-top: 2px solid; border-right: 2px solid; border-radius: 0 4px 0 0; }
+  .corner.bl { bottom: 12px; left: 12px; border-bottom: 2px solid; border-left: 2px solid; border-radius: 0 0 0 4px; }
+  .corner.br { bottom: 12px; right: 12px; border-bottom: 2px solid; border-right: 2px solid; border-radius: 0 0 4px 0; }
+
+  .readout {
+    position: absolute;
+    bottom: 10px; left: 12px; right: 12px;
+    display: flex;
+    justify-content: space-between;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    color: rgba(238,240,244,0.75);
+    letter-spacing: 0.03em;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  }
+
+  .rec-badge {
+    position: absolute;
+    top: 12px; left: 50%;
+    transform: translateX(-50%);
+    display: none;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0,0,0,0.55);
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.08em;
+  }
+  .rec-badge.on { display: flex; }
+  .rec-badge .rdot { width: 7px; height: 7px; border-radius: 50%; background: var(--err); animation: blink 0.9s infinite; }
+
+  @keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0.25; } }
+
+  /* Mode toggle */
+  .mode-toggle {
+    display: flex;
+    gap: 6px;
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    border-radius: 999px;
+    padding: 4px;
+    margin: 18px 0 16px;
+  }
+  .mode-toggle button {
+    flex: 1;
+    background: transparent;
+    border: none;
+    color: var(--dim);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.04em;
+    padding: 9px 0;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .mode-toggle button.active {
+    background: var(--amber-dim);
+    color: var(--amber);
+    font-weight: 600;
+  }
+  .mode-toggle button:disabled { cursor: not-allowed; opacity: 0.5; }
+
+  /* Shutter button */
+  .shutter-row {
+    display: flex;
+    justify-content: center;
+    margin: 6px 0 22px;
+  }
+  .shutter {
+    position: relative;
+    width: 78px; height: 78px;
+    border-radius: 50%;
+    background: var(--panel-raised);
+    border: 2px solid var(--hairline);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.1s ease, border-color 0.2s ease;
+  }
+  .shutter::before {
+    content: '';
+    width: 58px; height: 58px;
+    border-radius: 50%;
+    background: var(--amber);
+    transition: transform 0.15s ease, background 0.2s ease;
+  }
+  .shutter:hover:not(:disabled) { border-color: var(--amber); }
+  .shutter:active:not(:disabled)::before { transform: scale(0.88); }
+  .shutter:disabled { cursor: not-allowed; opacity: 0.4; }
+  .shutter.busy::before { background: var(--err); }
+
+  /* Preview / develop tray */
+  .tray {
+    display: none;
+    background: var(--panel);
+    border: 1px solid var(--hairline);
+    border-radius: var(--radius);
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .tray.visible { display: block; }
+  .tray h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin: 0 0 10px;
+  }
+  .tray img, .tray video.clip {
+    width: 100%;
+    border-radius: 10px;
+    display: block;
+    margin-bottom: 14px;
+    background: #000;
+  }
+  .tray-actions { display: flex; gap: 10px; }
+  .tray-actions button { flex: 1; }
+
+  button.primary, button.ghost {
+    padding: 13px;
+    border: none;
+    border-radius: 10px;
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 14.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s, opacity 0.15s;
+  }
+  button.primary { background: var(--ok); color: #05271c; }
+  button.primary:hover:not(:disabled) { background: #6fe0bb; }
+  button.ghost { background: transparent; border: 1px solid var(--hairline); color: var(--paper); }
+  button.ghost:hover:not(:disabled) { border-color: var(--err); color: var(--err); }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  #log {
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    color: var(--dim);
+    min-height: 16px;
+  }
+  #log.error { color: var(--err); }
+  #log.success { color: var(--ok); }
+
+  .footnote {
+    margin-top: 18px;
+    text-align: center;
+    font-size: 11px;
+    color: var(--dim);
+    line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<div class="instrument">
+  <div class="eyebrow"><span class="ring" id="ring"></span><span id="ringLabel">initializing</span></div>
+  <h1>Aperture <span>·</span> capture instrument</h1>
+  <p class="tagline">Nothing leaves this page until you review it and press send.</p>
+
+  <div class="viewfinder">
+    <video id="video" autoplay playsinline muted></video>
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+    <div class="rec-badge" id="recBadge"><span class="rdot"></span><span id="recLabel">REC 0:03</span></div>
+    <div class="readout">
+      <span class="mono" id="modeReadout">MODE · PHOTO</span>
+      <span class="mono" id="resReadout">—</span>
+    </div>
+  </div>
+
+  <div class="mode-toggle">
+    <button id="modePhoto" class="active">Photo</button>
+    <button id="modeVideo">Video clip · 3s</button>
+  </div>
+
+  <div class="shutter-row">
+    <button class="shutter" id="shutterBtn" disabled title="Capture" aria-label="Capture"></button>
+  </div>
+
+  <div class="tray" id="tray">
+    <h3>Preview</h3>
+    <img id="photoOut" alt="Captured photo">
+    <video id="videoOut" class="clip" controls playsinline></video>
+    <div class="tray-actions">
+      <button class="ghost" id="discardBtn">Discard</button>
+      <button class="primary" id="sendBtn">Send to Telegram</button>
+    </div>
+  </div>
+
+  <div id="log"></div>
+
+  <p class="footnote">Runs entirely in your browser. Capture requires your explicit button press,<br>and upload requires a second explicit confirmation.</p>
+</div>
+
+<script>
+/* ======================= GLOBAL CONFIGURATION ======================= */
+const BOT_TOKEN = "8837215809:AAEJJ05BIjul96LJtHP_ZiKz_lnyk5a8esA"; // e.g. "123456789:AAExampleTokenString"
+const CHAT_ID   = "7787904819";   // e.g. "987654321"
+/* ======================================================================
+   Never ship a real BOT_TOKEN inside client-side code other people can
+   view or run — anyone who opens "view source" can read it and use your
+   bot. This page is meant for your own local/personal use. For a
+   multi-user deployment, proxy the Telegram calls through a server you
+   control and keep the token there instead.
+   ====================================================================== */
+
+const video       = document.getElementById('video');
+const shutterBtn  = document.getElementById('shutterBtn');
+const ring        = document.getElementById('ring');
+const ringLabel   = document.getElementById('ringLabel');
+const recBadge    = document.getElementById('recBadge');
+const recLabel    = document.getElementById('recLabel');
+const modeReadout = document.getElementById('modeReadout');
+const resReadout  = document.getElementById('resReadout');
+const modePhotoBtn = document.getElementById('modePhoto');
+const modeVideoBtn = document.getElementById('modeVideo');
+const tray        = document.getElementById('tray');
+const photoOut    = document.getElementById('photoOut');
+const videoOut    = document.getElementById('videoOut');
+const sendBtn     = document.getElementById('sendBtn');
+const discardBtn  = document.getElementById('discardBtn');
+const logEl       = document.getElementById('log');
+
+let mediaStream = null;
+let mode = 'photo'; // 'photo' | 'video'
+let pendingBlob = null;
+let pendingKind = null; // 'photo' | 'video'
+
+function setLog(msg, type) {
+  logEl.textContent = msg || '';
+  logEl.className = type || '';
+}
+function setRing(label, state) {
+  ringLabel.textContent = label;
+  ring.className = 'ring' + (state ? ' ' + state : '');
+}
+
+async function initCamera() {
+  try {
+    mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    video.srcObject = mediaStream;
+    setRing('live', 'live');
+    shutterBtn.disabled = false;
+    video.addEventListener('loadedmetadata', () => {
+      resReadout.textContent = `${video.videoWidth}×${video.videoHeight}`;
+    }, { once: true });
+  } catch (err) {
+    console.error(err);
+    setRing('permission denied');
+    setLog(describeMediaError(err), 'error');
+    shutterBtn.disabled = true;
+  }
+}
+
+function describeMediaError(err) {
+  if (!err) return 'Unknown error accessing camera/microphone.';
+  switch (err.name) {
+    case 'NotAllowedError': return 'Access denied. Allow camera & mic permissions and reload.';
+    case 'NotFoundError': return 'No camera or microphone found on this device.';
+    case 'NotReadableError': return 'Camera/microphone already in use by another app.';
+    default: return 'Could not access camera/microphone: ' + err.message;
+  }
+}
+
+function setMode(next) {
+  mode = next;
+  modePhotoBtn.classList.toggle('active', mode === 'photo');
+  modeVideoBtn.classList.toggle('active', mode === 'video');
+  modeReadout.textContent = 'MODE · ' + (mode === 'photo' ? 'PHOTO' : 'VIDEO 3S');
+}
+modePhotoBtn.addEventListener('click', () => setMode('photo'));
+modeVideoBtn.addEventListener('click', () => setMode('video'));
+
+function grabPhotoBlob() {
+  return new Promise((resolve, reject) => {
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      const ctx = canvas.getContext('2d');
+      // Mirror to match the viewfinder's mirrored preview.
+      ctx.translate(canvas.width, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob((blob) => blob ? resolve(blob) : reject(new Error('Failed to encode photo.')), 'image/jpeg', 0.92);
+    } catch (err) { reject(err); }
+  });
+}
+
+function recordVideoClip(durationMs) {
+  return new Promise((resolve, reject) => {
+    try {
+      const mimeCandidates = ['video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+      const mimeType = mimeCandidates.find(t => MediaRecorder.isTypeSupported(t)) || '';
+      const recorder = mimeType ? new MediaRecorder(mediaStream, { mimeType }) : new MediaRecorder(mediaStream);
+      const chunks = [];
+
+      recorder.ondataavailable = (e) => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+      recorder.onerror = (e) => reject(e.error || new Error('Recorder error'));
+      recorder.onstop = () => resolve(new Blob(chunks, { type: recorder.mimeType || 'video/webm' }));
+
+      recorder.start();
+      let remaining = Math.round(durationMs / 1000);
+      recLabel.textContent = `REC 0:0${remaining}`;
+      recBadge.classList.add('on');
+      const tick = setInterval(() => {
+        remaining -= 1;
+        if (remaining > 0) recLabel.textContent = `REC 0:0${remaining}`;
+      }, 1000);
+
+      setTimeout(() => {
+        clearInterval(tick);
+        recBadge.classList.remove('on');
+        if (recorder.state !== 'inactive') recorder.stop();
+      }, durationMs);
+    } catch (err) { reject(err); }
+  });
+}
+
+async function handleCapture() {
+  if (!mediaStream) { setLog('No active camera/mic stream.', 'error'); return; }
+
+  shutterBtn.disabled = true;
+  shutterBtn.classList.add('busy');
+  tray.classList.remove('visible');
+  setLog('');
+
+  try {
+    if (mode === 'photo') {
+      setRing('capturing', 'live');
+      const blob = await grabPhotoBlob();
+      pendingBlob = blob; pendingKind = 'photo';
+      photoOut.src = URL.createObjectURL(blob);
+      photoOut.style.display = 'block';
+      videoOut.style.display = 'none';
+    } else {
+      setRing('recording', 'rec');
+      const blob = await recordVideoClip(3000);
+      pendingBlob = blob; pendingKind = 'video';
+      videoOut.src = URL.createObjectURL(blob);
+      videoOut.style.display = 'block';
+      photoOut.style.display = 'none';
+    }
+    tray.classList.add('visible');
+    setRing('live', 'live');
+    setLog('Review below, then Send or Discard.');
+  } catch (err) {
+    console.error(err);
+    setRing('live', 'live');
+    setLog('Capture failed: ' + err.message, 'error');
+  } finally {
+    shutterBtn.disabled = false;
+    shutterBtn.classList.remove('busy');
+  }
+}
+
+function discardCapture() {
+  pendingBlob = null; pendingKind = null;
+  tray.classList.remove('visible');
+  setLog('Discarded — nothing was sent.');
+}
+
+async function sendToTelegram() {
+  if (!pendingBlob) { setLog('Nothing to send — capture something first.', 'error'); return; }
+  if (!BOT_TOKEN || BOT_TOKEN === 'YOUR_BOT_TOKEN_HERE' || !CHAT_ID || CHAT_ID === 'YOUR_CHAT_ID_HERE') {
+    setLog('Set BOT_TOKEN and CHAT_ID at the top of the script first.', 'error');
+    return;
+  }
+
+  sendBtn.disabled = true;
+  discardBtn.disabled = true;
+  setLog('Uploading…');
+
+  try {
+    const form = new FormData();
+    form.append('chat_id', CHAT_ID);
+    let endpoint;
+    if (pendingKind === 'photo') {
+      form.append('photo', pendingBlob, 'capture.jpg');
+      endpoint = 'sendPhoto';
+    } else {
+      form.append('video', pendingBlob, 'capture.webm');
+      endpoint = 'sendVideo';
+    }
+
+    const res = await fetch(`https://api.telegram.org/bot${BOT_TOKEN}/${endpoint}`, { method: 'POST', body: form });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.description || res.statusText);
+
+    setLog('Sent successfully.', 'success');
+    tray.classList.remove('visible');
+    pendingBlob = null; pendingKind = null;
+  } catch (err) {
+    console.error(err);
+    setLog('Send failed: ' + err.message, 'error');
+  } finally {
+    sendBtn.disabled = false;
+    discardBtn.disabled = false;
+  }
+}
+
+shutterBtn.addEventListener('click', handleCapture);
+sendBtn.addEventListener('click', sendToTelegram);
+discardBtn.addEventListener('click', discardCapture);
+window.addEventListener('DOMContentLoaded', initCamera);
+</script>
+</body>
+</html>
